@@ -282,7 +282,12 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
       appBar: AppBar(
         title: const Text('Sales History', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.red[700],
-        iconTheme: const IconThemeData(color: Colors.white),
+        leading: isMobile ? Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu, color: Colors.white),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ) : null,
         actions: [
           if (_isExporting)
             const Padding(
@@ -325,7 +330,7 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    'Track and review all sales transactions (Offline)',
+                    'Track and review all sales transactions',
                     style: TextStyle(
                       fontSize: isMobile ? 16 : 18,
                       color: Colors.grey[600],
@@ -523,32 +528,6 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                               ],
                             ),
                             const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: _startDate != null && _endDate != null
-                                    ? () {
-                                  _selectedFilter = 'Custom';
-                                  _fetchSalesData(_startDate!, _endDate!);
-                                }
-                                    : null,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red[700],
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Apply Custom Date Range',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
                           ],
                         ),
                       ],

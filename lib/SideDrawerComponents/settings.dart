@@ -224,18 +224,63 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _deleteProduct(String productId) async {
-    final confirmed = await showDialog<bool>(
+    // First check if product has sales history
+    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    final product = productProvider.getProductById(productId);
+    
+    final confirmed = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Confirm Delete'),
-        content: const Text('Are you sure you want to delete this product?'),
+        title: const Text('Delete Product'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to delete "${product?.productName ?? 'this product'}"?'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange[200]!),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.warning, color: Colors.orange[700], size: 20),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Important',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Products with sales history cannot be deleted. If deletion fails, consider disabling the product instead.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(context, 'cancel'),
             child: const Text('Cancel'),
           ),
+          if (product?.isActive == true)
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'disable'),
+              style: TextButton.styleFrom(foregroundColor: Colors.orange),
+              child: const Text('Disable Instead'),
+            ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(context, 'delete'),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),
           ),
@@ -243,16 +288,80 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
 
-    if (confirmed == true) {
-      final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    if (confirmed == 'delete') {
       final success = await productProvider.deleteProduct(productId);
 
       if (success) {
         _showSuccessSnackbar('Product deleted successfully!');
         await _loadProductsAndCategories();
       } else {
-        _showErrorSnackbar('Failed to delete product: ${productProvider.errorMessage}');
+        // Show specific error message with option to disable instead
+        final errorMessage = productProvider.errorMessage;
+        if (errorMessage.contains('sales history')) {
+          _showDisableOptionDialog(productId, product?.productName ?? 'Product');
+        } else {
+          _showErrorSnackbar('Failed to delete product: $errorMessage');
+        }
       }
+    } else if (confirmed == 'disable') {
+      await _toggleProductStatus(productId, false);
+    }
+  }
+
+  Future<void> _showDisableOptionDialog(String productId, String productName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cannot Delete Product'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('$productName cannot be deleted because it has sales history.'),
+            const SizedBox(height: 12),
+            const Text('Would you like to disable it instead? Disabled products won\'t appear in the POS but will remain in the system for record-keeping.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.orange),
+            child: const Text('Disable Product'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _toggleProductStatus(productId, false);
+    }
+  }
+
+  Future<void> _toggleProductStatus(String productId, bool isActive) async {
+    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    final success = await productProvider.toggleProductStatus(productId, isActive);
+
+    if (success) {
+      _showSuccessSnackbar('Product ${isActive ? 'enabled' : 'disabled'} successfully!');
+      await _loadProductsAndCategories();
+    } else {
+      _showErrorSnackbar('Failed to ${isActive ? 'enable' : 'disable'} product: ${productProvider.errorMessage}');
+    }
+  }
+
+  Future<void> _toggleProductAvailability(String productId, bool isAvailable) async {
+    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    final success = await productProvider.toggleProductAvailability(productId, isAvailable);
+
+    if (success) {
+      _showSuccessSnackbar('Product marked as ${isAvailable ? 'available' : 'out of stock'} successfully!');
+      await _loadProductsAndCategories();
+    } else {
+      _showErrorSnackbar('Failed to update availability: ${productProvider.errorMessage}');
     }
   }
 
@@ -723,13 +832,55 @@ class _SettingsPageState extends State<SettingsPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      '₱${product.productPrice.toStringAsFixed(2)}', // CHANGED FROM $ TO ₱
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '₱${product.productPrice.toStringAsFixed(2)}', // CHANGED FROM $ TO ₱
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: product.isActive && product.isAvailable ? Colors.green : Colors.grey,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            if (!product.isActive)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                margin: const EdgeInsets.only(right: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange[100],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  'DISABLED',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.orange[700],
+                                  ),
+                                ),
+                              ),
+                            if (!product.isAvailable)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.red[100],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  'OUT OF STOCK',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red[700],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
                     ),
                     Row(
                       children: [
@@ -737,9 +888,42 @@ class _SettingsPageState extends State<SettingsPage> {
                           onPressed: () => _editProduct(product.productId),
                           icon: const Icon(Icons.edit, color: Colors.blue),
                         ),
+                        // Availability toggle for all users
                         IconButton(
-                          onPressed: () => _deleteProduct(product.productId),
-                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _toggleProductAvailability(product.productId, !product.isAvailable),
+                          icon: Icon(
+                            product.isAvailable ? Icons.inventory : Icons.inventory_2_outlined,
+                            color: product.isAvailable ? Colors.green : Colors.red,
+                          ),
+                          tooltip: product.isAvailable ? 'Mark Out of Stock' : 'Mark Available',
+                        ),
+                        // Admin-only enable/disable toggle
+                        Consumer<AuthProvider>(
+                          builder: (context, authProvider, child) {
+                            if (authProvider.isAdmin) {
+                              return IconButton(
+                                onPressed: () => _toggleProductStatus(product.productId, !product.isActive),
+                                icon: Icon(
+                                  product.isActive ? Icons.visibility_off : Icons.visibility,
+                                  color: product.isActive ? Colors.orange : Colors.green,
+                                ),
+                                tooltip: product.isActive ? 'Disable' : 'Enable',
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                        // Admin-only delete button
+                        Consumer<AuthProvider>(
+                          builder: (context, authProvider, child) {
+                            if (authProvider.isAdmin) {
+                              return IconButton(
+                                onPressed: () => _deleteProduct(product.productId),
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
                         ),
                       ],
                     ),
@@ -781,10 +965,53 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               DataCell(Text(product.productCategory)),
-              DataCell(Text(
-                '₱${product.productPrice.toStringAsFixed(2)}', // CHANGED FROM $ TO ₱
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              )),
+              DataCell(
+                Row(
+                  children: [
+                    Text(
+                      '₱${product.productPrice.toStringAsFixed(2)}', // CHANGED FROM $ TO ₱
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: product.isActive && product.isAvailable ? Colors.black : Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (!product.isActive)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        margin: const EdgeInsets.only(right: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'DISABLED',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange[700],
+                          ),
+                        ),
+                      ),
+                    if (!product.isAvailable)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.red[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'OUT OF STOCK',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red[700],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
               DataCell(
                 Row(
                   children: [
@@ -793,10 +1020,43 @@ class _SettingsPageState extends State<SettingsPage> {
                       icon: const Icon(Icons.edit, color: Colors.blue),
                       tooltip: 'Edit',
                     ),
+                    // Availability toggle for all users
                     IconButton(
-                      onPressed: () => _deleteProduct(product.productId),
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      tooltip: 'Delete',
+                      onPressed: () => _toggleProductAvailability(product.productId, !product.isAvailable),
+                      icon: Icon(
+                        product.isAvailable ? Icons.inventory : Icons.inventory_2_outlined,
+                        color: product.isAvailable ? Colors.green : Colors.red,
+                      ),
+                      tooltip: product.isAvailable ? 'Mark Out of Stock' : 'Mark Available',
+                    ),
+                    // Admin-only enable/disable toggle
+                    Consumer<AuthProvider>(
+                      builder: (context, authProvider, child) {
+                        if (authProvider.isAdmin) {
+                          return IconButton(
+                            onPressed: () => _toggleProductStatus(product.productId, !product.isActive),
+                            icon: Icon(
+                              product.isActive ? Icons.visibility_off : Icons.visibility,
+                              color: product.isActive ? Colors.orange : Colors.green,
+                            ),
+                            tooltip: product.isActive ? 'Disable' : 'Enable',
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                    // Admin-only delete button
+                    Consumer<AuthProvider>(
+                      builder: (context, authProvider, child) {
+                        if (authProvider.isAdmin) {
+                          return IconButton(
+                            onPressed: () => _deleteProduct(product.productId),
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            tooltip: 'Delete',
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
                     ),
                   ],
                 ),
@@ -821,7 +1081,12 @@ class _SettingsPageState extends State<SettingsPage> {
       appBar: AppBar(
         title: const Text('Settings', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.red[700],
-        iconTheme: const IconThemeData(color: Colors.white),
+        leading: isMobile ? Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu, color: Colors.white),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ) : null,
       ),
       drawer: isMobile ? drawerWidget(context) : null,
       body: Row(

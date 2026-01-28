@@ -169,12 +169,7 @@ class _DashboardPageState extends State<DashboardPage> {
           IconButton(
             icon: const Icon(Icons.sync, color: Colors.white),
             onPressed: _isLoading ? null : _syncData,
-            tooltip: 'Sync Data',
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: _isLoading ? null : _loadDashboardData,
-            tooltip: 'Refresh Dashboard',
+            tooltip: 'Sync & Refresh Data',
           ),
           if (authProvider.fullName != null)
             Padding(
@@ -245,9 +240,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    authProvider.isOnline
-                        ? 'Connected to Supabase (Online Mode)'
-                        : 'Using Local Database (Offline Mode)',
+                    'Connected to Supabase Database',
                     style: TextStyle(
                       fontSize: isMobile ? 16 : 18,
                       color: Colors.grey[600],
@@ -522,17 +515,15 @@ class _DashboardPageState extends State<DashboardPage> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: authProvider.isOnline ? Colors.green[50] : Colors.blue[50],
+                      color: Colors.green[50],
                       borderRadius: BorderRadius.circular(15),
-                      border: Border.all(
-                          color: authProvider.isOnline ? Colors.green[200]! : Colors.blue[200]!
-                      ),
+                      border: Border.all(color: Colors.green[200]!),
                     ),
                     child: Row(
                       children: [
                         Icon(
-                          authProvider.isOnline ? Icons.cloud_done : Icons.cloud_off,
-                          color: authProvider.isOnline ? Colors.green[700] : Colors.blue[700],
+                          Icons.cloud_done,
+                          color: Colors.green[700],
                           size: 30,
                         ),
                         const SizedBox(width: 15),
@@ -541,21 +532,19 @@ class _DashboardPageState extends State<DashboardPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                authProvider.isOnline ? 'Online Mode' : 'Offline Mode',
+                                'Supabase Database',
                                 style: TextStyle(
                                   fontSize: isMobile ? 16 : 18,
                                   fontWeight: FontWeight.bold,
-                                  color: authProvider.isOnline ? Colors.green[900] : Colors.blue[900],
+                                  color: Colors.green[900],
                                 ),
                               ),
                               const SizedBox(height: 5),
                               Text(
-                                authProvider.isOnline
-                                    ? 'Data is synced with cloud database. All changes are saved online.'
-                                    : 'Data is stored locally. Changes will sync when back online.',
+                                'All data is stored and synced with Supabase cloud database.',
                                 style: TextStyle(
                                   fontSize: isMobile ? 14 : 16,
-                                  color: authProvider.isOnline ? Colors.green[800] : Colors.blue[800],
+                                  color: Colors.green[800],
                                 ),
                               ),
                             ],
@@ -567,7 +556,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           },
                           icon: Icon(
                             Icons.arrow_forward,
-                            color: authProvider.isOnline ? Colors.green[700] : Colors.blue[700],
+                            color: Colors.green[700],
                           ),
                         ),
                       ],

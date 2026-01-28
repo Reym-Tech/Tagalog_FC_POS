@@ -78,6 +78,17 @@ class SaleProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // Remove unavailable products from cart
+  void removeUnavailableProducts(List<String> unavailableProductIds) {
+    final initialCount = _cartItems.length;
+    _cartItems.removeWhere((item) => unavailableProductIds.contains(item.productId));
+    
+    if (_cartItems.length != initialCount) {
+      _calculateTotals();
+      notifyListeners();
+    }
+  }
+
   void _calculateTotals() {
     _totalAmount = _cartItems.fold(0.0, (sum, item) => sum + item.subtotal);
     _changeAmount = _amountPaid - _totalAmount;

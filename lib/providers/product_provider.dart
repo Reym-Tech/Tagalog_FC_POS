@@ -114,6 +114,46 @@ class ProductProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> toggleProductStatus(String productId, bool isActive) async {
+    _isLoading = true;
+    _errorMessage = '';
+    notifyListeners();
+
+    try {
+      await _supabase.toggleProductStatus(productId, isActive);
+      await loadProducts(); // Refresh products
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = 'Error updating product status: ${e.toString()}';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> toggleProductAvailability(String productId, bool isAvailable) async {
+    _isLoading = true;
+    _errorMessage = '';
+    notifyListeners();
+
+    try {
+      await _supabase.toggleProductAvailability(productId, isAvailable);
+      await loadProducts(); // Refresh products
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = 'Error updating product availability: ${e.toString()}';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   Product? getProductById(String productId) {
     try {
       return _products.firstWhere((product) => product.productId == productId);
@@ -126,8 +166,28 @@ class ProductProvider with ChangeNotifier {
     return _products.where((product) => product.productCategory == category).toList();
   }
 
+  List<Product> getActiveProducts() {
+    return _products.where((product) => product.isActive).toList();
+  }
+
+  List<Product> getActiveProductsByCategory(String category) {
+    return _products.where((product) => product.productCategory == category && product.isActive).toList();
+  }
+
+  List<Product> getSelectableProducts() {
+    return _products.where((product) => product.isSelectable).toList();
+  }
+
+  List<Product> getSelectableProductsByCategory(String category) {
+    return _products.where((product) => product.productCategory == category && product.isSelectable).toList();
+  }
+
   List<String> getCategories() {
-    final categories = _products.map((p) => p.productCategory).toSet().toList();
+    final categories = _products
+        .where((p) => p.isActive) // Only show categories from active products
+        .map((p) => p.productCategory)
+        .toSet()
+        .toList();
     categories.removeWhere((cat) => cat.isEmpty);
     categories.sort();
     return categories;

@@ -4,6 +4,8 @@ class Product {
   final String productDescription;
   final double productPrice;
   final String productCategory;
+  final bool isActive; // Admin control: enabled/disabled
+  final bool isAvailable; // Staff control: available/out of stock
 
   Product({
     required this.productId,
@@ -11,6 +13,8 @@ class Product {
     required this.productDescription,
     required this.productPrice,
     required this.productCategory,
+    this.isActive = true, // Default to active
+    this.isAvailable = true, // Default to available
   });
 
   factory Product.fromMap(Map<String, dynamic> map) {
@@ -20,6 +24,8 @@ class Product {
       productDescription: map['description'] ?? map['product_description'] ?? '',
       productPrice: double.tryParse(map['price']?.toString() ?? map['product_price']?.toString() ?? '0') ?? 0.0,
       productCategory: map['category'] ?? map['product_category'] ?? '',
+      isActive: map['active'] ?? map['is_active'] ?? true, // Default to true if column doesn't exist
+      isAvailable: map['available'] ?? map['is_available'] ?? true, // Default to true if column doesn't exist
     );
   }
 
@@ -30,6 +36,8 @@ class Product {
       'description': productDescription,
       'price': productPrice,
       'category': productCategory,
+      'active': isActive, // Include active field
+      'available': isAvailable, // Include available field
     };
   }
 
@@ -39,6 +47,8 @@ class Product {
     String? productDescription,
     double? productPrice,
     String? productCategory,
+    bool? isActive, // Allow copying with different active state
+    bool? isAvailable, // Allow copying with different available state
   }) {
     return Product(
       productId: productId ?? this.productId,
@@ -46,6 +56,11 @@ class Product {
       productDescription: productDescription ?? this.productDescription,
       productPrice: productPrice ?? this.productPrice,
       productCategory: productCategory ?? this.productCategory,
+      isActive: isActive ?? this.isActive, // Copy active state
+      isAvailable: isAvailable ?? this.isAvailable, // Copy available state
     );
   }
+
+  // Helper method to check if product should be shown in POS
+  bool get isSelectable => isActive && isAvailable;
 }

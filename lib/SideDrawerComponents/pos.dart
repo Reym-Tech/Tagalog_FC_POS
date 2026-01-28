@@ -61,13 +61,13 @@ class _PosPageState extends State<PosPage> {
           ),
         ),
         backgroundColor: Colors.red[700],
-        iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bug_report, color: Colors.white),
-            onPressed: _runDatabaseDiagnostics,
-            tooltip: 'Database Diagnostics',
+        leading: isMobile ? Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu, color: Colors.white),
+            onPressed: () => Scaffold.of(context).openDrawer(),
           ),
+        ) : null,
+        actions: [
           if (isAdmin)
             IconButton(
               icon: const Icon(Icons.add, color: Colors.white),
@@ -120,7 +120,7 @@ class _PosPageState extends State<PosPage> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (productProvider.products.isEmpty) {
+    if (productProvider.getActiveProducts().isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -172,7 +172,7 @@ class _PosPageState extends State<PosPage> {
           Expanded(
             child: TabBarView(
               children: categories.map((category) {
-                final categoryProducts = productProvider.getProductsByCategory(category);
+                final categoryProducts = productProvider.getActiveProductsByCategory(category);
 
                 return GridView.builder(
                   padding: const EdgeInsets.all(15.0),
@@ -214,25 +214,92 @@ class _PosPageState extends State<PosPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              product.productName,
-              style: TextStyle(
-                fontSize: isMobile ? 16 : 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[900],
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            // Header with product name and availability toggle
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    product.productName,
+                    style: TextStyle(
+                      fontSize: isMobile ? 16 : 18,
+                      fontWeight: FontWeight.bold,
+                      color: product.isAvailable ? Colors.grey[900] : Colors.grey[500],
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Availability toggle for all users
+                Consumer<ProductProvider>(
+                  builder: (context, productProvider, child) {
+                    return GestureDetector(
+                      onTap: () async {
+                        final success = await productProvider.toggleProductAvailability(
+                          product.productId, 
+                          !product.isAvailable
+                        );
+                        if (success) {
+                          // If product becomes unavailable, remove it from cart
+                          if (!product.isAvailable) {
+                            saleProvider.removeFromCart(product.productId);
+                          }
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(productProvider.errorMessage),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: product.isAvailable ? Colors.green[100] : Colors.red[100],
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(
+                          product.isAvailable ? Icons.check_circle : Icons.cancel,
+                          size: 16,
+                          color: product.isAvailable ? Colors.green[700] : Colors.red[700],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
 
             const SizedBox(height: 8),
+
+            // Availability status badge
+            if (!product.isAvailable)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'OUT OF STOCK',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red[700],
+                  ),
+                ),
+              ),
+
+            if (!product.isAvailable) const SizedBox(height: 8),
 
             Expanded(
               child: Text(
                 product.productDescription,
                 style: TextStyle(
                   fontSize: isMobile ? 12 : 14,
-                  color: Colors.grey[600],
+                  color: product.isAvailable ? Colors.grey[600] : Colors.grey[400],
                 ),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
@@ -253,7 +320,7 @@ class _PosPageState extends State<PosPage> {
                       style: TextStyle(
                         fontSize: isMobile ? 16 : 18,
                         fontWeight: FontWeight.bold,
-                        color: Colors.red[700],
+                        color: product.isAvailable ? Colors.red[700] : Colors.grey[400],
                       ),
                     ),
                     Text(
@@ -266,12 +333,12 @@ class _PosPageState extends State<PosPage> {
                   ],
                 ),
 
-                // Add/Minus buttons
+                // Add/Minus buttons - disabled if not available
                 if (cartItem != null && cartItem.quantity > 0)
                   Container(
                     height: 36,
                     decoration: BoxDecoration(
-                      color: Colors.red[50],
+                      color: product.isAvailable ? Colors.red[50] : Colors.grey[100],
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -281,13 +348,13 @@ class _PosPageState extends State<PosPage> {
                           width: 32,
                           height: 32,
                           child: IconButton(
-                            onPressed: () {
+                            onPressed: product.isAvailable ? () {
                               if (cartItem!.quantity > 1) {
                                 saleProvider.updateQuantity(product.productId, cartItem.quantity - 1);
                               } else {
                                 saleProvider.removeFromCart(product.productId);
                               }
-                            },
+                            } : null,
                             icon: const Icon(Icons.remove, size: 16),
                             padding: EdgeInsets.zero,
                             iconSize: 16,
@@ -298,9 +365,10 @@ class _PosPageState extends State<PosPage> {
                           alignment: Alignment.center,
                           child: Text(
                             cartItem!.quantity.toString(),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
+                              color: product.isAvailable ? Colors.black : Colors.grey[500],
                             ),
                           ),
                         ),
@@ -308,9 +376,9 @@ class _PosPageState extends State<PosPage> {
                           width: 32,
                           height: 32,
                           child: IconButton(
-                            onPressed: () {
+                            onPressed: product.isAvailable ? () {
                               saleProvider.updateQuantity(product.productId, cartItem!.quantity + 1);
-                            },
+                            } : null,
                             icon: const Icon(Icons.add, size: 16),
                             padding: EdgeInsets.zero,
                             iconSize: 16,
@@ -323,7 +391,7 @@ class _PosPageState extends State<PosPage> {
                   SizedBox(
                     height: 36,
                     child: ElevatedButton(
-                      onPressed: () {
+                      onPressed: product.isAvailable ? () {
                         saleProvider.addToCart(SaleItem(
                           productId: product.productId,
                           productName: product.productName,
@@ -331,18 +399,18 @@ class _PosPageState extends State<PosPage> {
                           productPrice: product.productPrice,
                           quantity: 1,
                         ));
-                      },
+                      } : null,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red[700],
+                        backgroundColor: product.isAvailable ? Colors.red[700] : Colors.grey[400],
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(6),
                         ),
                         minimumSize: Size.zero,
                       ),
-                      child: const Text(
-                        'ADD',
-                        style: TextStyle(
+                      child: Text(
+                        product.isAvailable ? 'ADD' : 'OUT',
+                        style: const TextStyle(
                           fontSize: 12,
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -1321,170 +1389,6 @@ class _PosPageState extends State<PosPage> {
               fontWeight: FontWeight.bold,
               color: color,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ========== DATABASE DIAGNOSTICS ==========
-  Future<void> _runDatabaseDiagnostics() async {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Database Diagnostics'),
-        content: FutureBuilder(
-          future: _checkDatabaseHealth(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            final diagnostics = snapshot.data as Map<String, dynamic>;
-
-            return SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Status: ${diagnostics['status']}'),
-                  const SizedBox(height: 10),
-                  Text('Database Path: ${diagnostics['db_path']}'),
-                  Text('Sales Table: ${diagnostics['sales_table']}'),
-                  Text('Sale Items Table: ${diagnostics['sale_items_table']}'),
-                  const SizedBox(height: 10),
-                  Text('Total Sales: ${diagnostics['total_sales']}'),
-                  Text('Total Sale Items: ${diagnostics['total_sale_items']}'),
-                  const SizedBox(height: 10),
-                  if (diagnostics['error'] != null)
-                    Text('Error: ${diagnostics['error']}', style: const TextStyle(color: Colors.red)),
-                ],
-              ),
-            );
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              await _repairDatabase();
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            child: const Text('Repair Database'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              await _resetDatabase();
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Reset Database'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<Map<String, dynamic>> _checkDatabaseHealth() async {
-    try {
-      final supabaseService = SupabaseService();
-      
-      // Test connection
-      final isConnected = await supabaseService.testConnection();
-      
-      if (isConnected) {
-        return {
-          'status': 'healthy',
-          'message': 'Supabase connection is working properly',
-          'details': 'All database operations are functional',
-        };
-      } else {
-        return {
-          'status': 'error',
-          'message': 'Cannot connect to Supabase',
-          'details': 'Check your internet connection and Supabase configuration',
-        };
-      }
-    } catch (e) {
-      return {
-        'status': 'error',
-        'message': 'Database health check failed',
-        'details': e.toString(),
-      };
-    }
-  }
-
-  Future<void> _repairDatabase() async {
-    try {
-      final supabaseService = SupabaseService();
-      
-      // Test connection and reinitialize if needed
-      await supabaseService.initialize();
-      
-      final isConnected = await supabaseService.testConnection();
-      
-      if (isConnected) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Supabase connection restored successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        throw Exception('Unable to restore connection');
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Repair failed: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  Future<void> _resetDatabase() async {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Reset Database?'),
-        content: const Text('This will delete ALL sales data. Are you sure?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                // Since we're using Supabase-only, we can't directly reset the database
-                // Instead, we'll show a message that this operation is not available
-                Navigator.pop(context);
-                Navigator.pop(context); // Close diagnostics too
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('⚠️ Database reset not available in Supabase-only mode. Please use Supabase dashboard to manage data.'),
-                    backgroundColor: Colors.orange,
-                    duration: Duration(seconds: 4),
-                  ),
-                );
-              } catch (e) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Error resetting database: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Reset', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

@@ -100,17 +100,93 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
     if (confirmed == true) {
       setState(() => _isLoading = true);
-      
+
       try {
         final tempPassword = await _supabase.resetUserPassword(username);
         
         if (tempPassword != null) {
           _showTempPasswordDialog(username, tempPassword);
+          await _loadUsers();
         } else {
           _showErrorSnackbar('Failed to reset password');
         }
       } catch (e) {
         _showErrorSnackbar('Error resetting password: $e');
+      } finally {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _deleteUser(String userId, String username) async {
+    final confirmed = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete User'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to delete user "$username"?'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red[200]!),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.warning, color: Colors.red[700], size: 20),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Warning',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Users with sales history cannot be deleted for audit purposes. This action cannot be undone.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'cancel'),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'delete'),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == 'delete') {
+      setState(() => _isLoading = true);
+
+      try {
+        await _supabase.deleteUser(userId);
+        _showSuccessSnackbar('User deleted successfully!');
+        await _loadUsers();
+      } catch (e) {
+        final errorMessage = e.toString();
+        if (errorMessage.contains('sales history')) {
+          _showErrorSnackbar('Cannot delete user: This user has sales history and cannot be deleted for audit purposes.');
+        } else {
+          _showErrorSnackbar('Failed to delete user: $errorMessage');
+        }
       } finally {
         setState(() => _isLoading = false);
       }
@@ -220,7 +296,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
       appBar: AppBar(
         title: const Text('User Management', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.red[700],
-        iconTheme: const IconThemeData(color: Colors.white),
+        leading: isMobile ? Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu, color: Colors.white),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ) : null,
       ),
       drawer: isMobile ? drawerWidget(context) : null,
       body: Row(
@@ -573,10 +654,22 @@ class _UserManagementPageState extends State<UserManagementPage> {
                               ],
                             ),
                           ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, size: 18, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text('Delete User', style: TextStyle(color: Colors.red)),
+                              ],
+                            ),
+                          ),
                         ],
                         onSelected: (value) {
                           if (value == 'reset') {
                             _resetUserPassword(user['username']);
+                          } else if (value == 'delete') {
+                            _deleteUser(user['id'], user['username']);
                           }
                         },
                       ),

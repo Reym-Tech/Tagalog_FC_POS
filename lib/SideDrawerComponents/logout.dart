@@ -11,8 +11,14 @@ class LogoutPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Logout'),
+        title: const Text('Logout', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.red[700],
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
       ),
       body: Center(
         child: Padding(

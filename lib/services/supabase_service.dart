@@ -281,10 +281,24 @@ class SupabaseService {
 
   Future<void> deleteUser(String userId) async {
     try {
+      // First check if this user has any sales history
+      final salesCheck = await client
+          .from('sales')
+          .select('id')
+          .eq('user_id', userId)
+          .limit(1);
+      
+      if (salesCheck.isNotEmpty) {
+        throw Exception('Cannot delete user: This user has sales history. User accounts with sales records cannot be deleted for audit purposes.');
+      }
+      
+      // If no sales history, proceed with deletion
       await client
           .from('users')
           .delete()
           .eq('id', userId);
+      
+      print('✅ User deleted successfully');
     } catch (e) {
       print('❌ Error deleting user from Supabase: $e');
       rethrow;
@@ -344,12 +358,76 @@ class SupabaseService {
 
   Future<void> deleteProduct(String productId) async {
     try {
+      // First check if this product has any sales history
+      final salesCheck = await client
+          .from('sale_items')
+          .select('id')
+          .eq('product_id', productId)
+          .limit(1);
+      
+      if (salesCheck.isNotEmpty) {
+        throw Exception('Cannot delete product: This product has sales history. Consider disabling it instead.');
+      }
+      
+      // If no sales history, proceed with deletion
       await client
           .from('products')
           .delete()
           .eq('id', productId);
+      
+      print('✅ Product deleted successfully');
     } catch (e) {
       print('❌ Error deleting product from Supabase: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> toggleProductStatus(String productId, bool isActive) async {
+    try {
+      // Check if the active column exists first
+      final testQuery = await client
+          .from('products')
+          .select('active')
+          .eq('id', productId)
+          .limit(1);
+      
+      // If we get here, the column exists
+      await client
+          .from('products')
+          .update({'active': isActive})
+          .eq('id', productId);
+      
+      print('✅ Product status updated: ${isActive ? 'enabled' : 'disabled'}');
+    } catch (e) {
+      if (e.toString().contains('column "active" does not exist')) {
+        throw Exception('The active column does not exist in the products table. Please run the database migration first:\n\nALTER TABLE products ADD COLUMN active BOOLEAN DEFAULT true;');
+      }
+      print('❌ Error updating product status: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> toggleProductAvailability(String productId, bool isAvailable) async {
+    try {
+      // Check if the available column exists first
+      final testQuery = await client
+          .from('products')
+          .select('available')
+          .eq('id', productId)
+          .limit(1);
+      
+      // If we get here, the column exists
+      await client
+          .from('products')
+          .update({'available': isAvailable})
+          .eq('id', productId);
+      
+      print('✅ Product availability updated: ${isAvailable ? 'available' : 'out of stock'}');
+    } catch (e) {
+      if (e.toString().contains('column "available" does not exist')) {
+        throw Exception('The available column does not exist in the products table. Please run the database migration first:\n\nALTER TABLE products ADD COLUMN available BOOLEAN DEFAULT true;');
+      }
+      print('❌ Error updating product availability: $e');
       rethrow;
     }
   }
